@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>夕语 · 对话</title>
+<style>
+  :root{
+    --bg:#F6F4EF; --card:#FFFFFF; --line:#E3DFD6;
+    --ink:#2C2C2A; --muted:#6E6A62;
+    --me:#E8F0E6; --her:#FFFFFF; --accent:#5B6E52; --warn:#A3342B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 18px 120px;}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  h1{font-size:17px;font-weight:600;margin:0;}
+  .tag{font-size:12px;color:var(--muted);border:1px solid var(--line);
+    border-radius:20px;padding:2px 9px;background:#fff;}
+  .banner{margin:12px 0 18px;padding:9px 12px;border-radius:8px;
+    background:#FBF3E4;border:1px solid #EBDCBE;color:#7A5B1E;font-size:12.5px;line-height:1.6;}
+  .status{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7;}
+  .status b{font-weight:600;color:var(--ink);}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:1px;}
+  .on{background:#5B8C51}.off{background:#C25A4E}
+  .log{display:flex;flex-direction:column;gap:12px;}
+  .msg{max-width:78%;padding:10px 13px;border-radius:12px;line-height:1.7;font-size:15px;
+    white-space:pre-wrap;word-break:break-word;border:1px solid var(--line);}
+  .me{align-self:flex-end;background:var(--me);border-color:#D5E0D2;}
+  .her{align-self:flex-start;background:var(--her);}
+  .crisis{border-color:#E2B7B1;background:#FCF0EE;color:var(--warn);}
+  .meta{align-self:flex-start;font-size:11.5px;color:#9C978D;margin:-6px 0 0 4px;}
+  .meta button{background:none;border:none;color:#7C8A74;font-size:11.5px;cursor:pointer;padding:0 2px;text-decoration:underline;}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(#F6F4EF00,#F6F4EF 30%);padding:14px 18px 18px;}
+  .bar-in{max-width:760px;margin:0 auto;display:flex;gap:8px;background:#fff;border:1px solid var(--line);
+    border-radius:14px;padding:8px 8px 8px 14px;}
+  input{flex:1;border:none;outline:none;font-size:15px;background:transparent;color:var(--ink);}
+  button.send{background:var(--accent);color:#fff;border:none;border-radius:10px;
+    padding:9px 18px;font-size:14px;cursor:pointer;}
+  button.send:disabled{opacity:.45;cursor:default;}
+  .hint{max-width:760px;margin:8px auto 0;font-size:11.5px;color:#9C978D;text-align:center;}
+  .err{background:#FCF0EE;border:1px solid #E2B7B1;color:var(--warn);padding:10px 12px;
+    border-radius:8px;font-size:13px;line-height:1.6;margin-bottom:12px;}
+  .err code{background:#fff;padding:1px 5px;border-radius:4px;}
+  .err a{color:#8A3A2F;}
+  .keyrow{display:flex;gap:8px;margin-top:9px;}
+  .keyrow input{flex:1;min-width:0;border:1px solid #E2B7B1;border-radius:8px;
+    padding:8px 10px;font-size:13px;background:#fff;color:var(--ink);}
+  .keyrow button{background:var(--warn);color:#fff;border:none;border-radius:8px;
+    padding:8px 16px;font-size:13px;cursor:pointer;white-space:nowrap;}
+  .keyrow button:disabled{opacity:.5;cursor:default;}
+  .okline{color:#4A6B41;font-size:12.5px;margin-top:7px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>夕语 · 对话</h1>
+    <span class="tag" id="personaTag">加载中</span>
+  </header>
+
+  <div class="banner">
+    这是依据资料生成的 AI 模拟，不是本人。它会记不清、会说错，别把它当真人的回答。
+  </div>
+
+  <div id="errBox"></div>
+  <div class="status" id="status">正在检查环境…</div>
+  <div class="log" id="log"></div>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <input id="inp" placeholder="说点什么…（回车发送）" autocomplete="off">
+    <button class="send" id="send">发送</button>
+  </div>
+  <div class="hint">声音由本地模型合成，音频不出这台电脑</div>
+</div>
+
+<audio id="player"></audio>
+<script>
+const logEl = document.getElementById('log');
+const inp = document.getElementById('inp');
+const btn = document.getElementById('send');
+const statusEl = document.getElementById('status');
+const errBox = document.getElementById('errBox');
+const player = document.getElementById('player');
+
+function bubble(text, role, opts={}){
+  const d = document.createElement('div');
+  d.className = 'msg ' + (role === 'me' ? 'me' : 'her') + (opts.crisis ? ' crisis' : '');
+  d.textContent = text;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+  window.scrollTo(0, document.body.scrollHeight);
+  return d;
+}
+function meta(text, audioUrl){
+  if(!text && !audioUrl) return;
+  const m = document.createElement('div');
+  m.className = 'meta';
+  m.textContent = text || '';
+  if(audioUrl){
+    const b = document.createElement('button');
+    b.textContent = '再听一次';
+    b.onclick = () => { player.src = audioUrl; player.play(); };
+    m.appendChild(b);
+  }
+  logEl.appendChild(m);
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+async function loadStatus(){
+  try{
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    document.getElementById('personaTag').textContent = s.persona;
+    statusEl.innerHTML =
+      `<span class="dot ${s.llm_ready?'on':'off'}"></span>对话模型 ${s.llm_ready?('<b>'+s.llm_model+'</b> 已就绪'):'<b>未配置</b>'}　` +
+      `<span class="dot ${s.tts_ready?'on':'off'}"></span>声音 ${s.tts_ready?'<b>已就绪</b>':'<b>加载中</b>'}`;
+    if(!s.llm_ready){
+      if(!document.getElementById('keyInp')) showKeyBox();
+    } else if(s.tts_error){
+      errBox.innerHTML = `<div class="err">声音加载失败：${s.tts_error}</div>`;
+    } else if(document.getElementById('keyInp')){
+      errBox.innerHTML = '';
+    }
+    return s;
+  }catch(e){
+    statusEl.textContent = '服务未响应';
+  }
+}
+
+function showKeyBox(){
+  errBox.innerHTML = `<div class="err">
+    <div>还差一步：需要一个对话模型的 key。<br>
+    打开 <a href="https://bigmodel.cn" target="_blank">bigmodel.cn</a> → 手机号注册登录 →
+    左侧「API Keys」→「创建新的 API Key」→ 复制，粘到下面。</div>
+    <div class="keyrow">
+      <input id="keyInp" placeholder="粘贴 API Key，形如 a1b2c3d4.xxxxxxxx" autocomplete="off" spellcheck="false">
+      <button id="keyBtn">保存</button>
+    </div>
+    <div id="keyMsg"></div>
+  </div>`;
+  const ki = document.getElementById('keyInp');
+  const kb = document.getElementById('keyBtn');
+  const km = document.getElementById('keyMsg');
+  const save = async () => {
+    const key = ki.value.trim();
+    if(!key){ km.innerHTML = '<div class="okline" style="color:#A3342B">先把 key 粘进来</div>'; return; }
+    kb.disabled = true; kb.textContent = '验证中…';
+    try{
+      const r = await fetch('/api/key', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({key})
+      });
+      const d = await r.json();
+      if(!r.ok){ km.innerHTML = `<div class="okline" style="color:#A3342B">${d.error || '保存失败'}</div>`; }
+      else if(d.warning){
+        km.innerHTML = `<div class="okline" style="color:#A3342B">已保存，但试调用失败：${d.warning}<br>
+          可能是 key 不对、或这台机器连不上 bigmodel.cn。</div>`;
+      } else {
+        errBox.innerHTML = '';
+        loadStatus();
+      }
+    }catch(e){
+      km.innerHTML = '<div class="okline" style="color:#A3342B">连不上本地服务</div>';
+    }
+    kb.disabled = false; kb.textContent = '保存';
+  };
+  kb.onclick = save;
+  ki.addEventListener('keydown', e => { if(e.key === 'Enter') save(); });
+  ki.focus();
+}
+
+async function send(){
+  const text = inp.value.trim();
+  if(!text) return;
+  inp.value = '';
+  btn.disabled = true;
+  bubble(text, 'me');
+  const loading = bubble('…', 'her');
+  try{
+    const r = await fetch('/api/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    const d = await r.json();
+    loading.remove();
+    if(!r.ok){
+      bubble('（没能回答）' + (d.error || ''), 'her', {crisis:true});
+    }else{
+      bubble(d.reply, 'her', {crisis: d.crisis});
+      const src = (d.sources && d.sources.length) ? '来源：' + d.sources.map(s=>s.id+' '+s.title).join('、') + '　' : '';
+      meta(src, d.audio);
+      if(d.audio){ player.src = d.audio; player.play().catch(()=>{}); }
+    }
+  }catch(e){
+    loading.remove();
+    bubble('（连不上本地服务）', 'her', {crisis:true});
+  }
+  btn.disabled = false;
+  inp.focus();
+}
+
+btn.onclick = send;
+inp.addEventListener('keydown', e => { if(e.key === 'Enter') send(); });
+loadStatus();
+setInterval(loadStatus, 4000);
+</script>
+</body>
+</html>

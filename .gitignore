@@ -23,6 +23,20 @@ _分析/
 .workbuddy/
 
 # ============================================
+# 本地运行时：虚拟环境、模型权重、合成的音频、真实人格包
+# ============================================
+runtime/.venv/
+runtime/models/
+runtime/audio/
+runtime/persona/
+runtime/__pycache__/
+runtime/engine/__pycache__/
+# 调参过程中用的一次性实验脚本，不属于交付内容
+runtime/_experiments/
+# 人格包模板（保留），真实人格包忽略
+!runtime/persona.example/
+
+# ============================================
 # 系统与编辑器
 # ============================================
 .DS_Store
@@ -34,3 +48,6 @@ desktop.ini
 ~$*
 *.tmp
 *.log
+
+# 本地保存的 API Key
+llm-key.txt
